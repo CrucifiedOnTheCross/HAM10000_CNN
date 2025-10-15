@@ -15,6 +15,8 @@ from typing import Dict, Any, Optional, Tuple
 import tensorflow as tf
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score
 from sklearn.preprocessing import label_binarize
 
@@ -197,6 +199,216 @@ def calculate_additional_metrics(y_true: np.ndarray,
     }
     
     return metrics
+
+
+def plot_training_metrics(history: tf.keras.callbacks.History, 
+                         experiment_dir: str,
+                         logger: logging.Logger) -> None:
+    """
+    Plot training metrics over epochs using seaborn.
+    
+    Args:
+        history: Training history from model.fit()
+        experiment_dir: Directory to save plots
+        logger: Logger instance
+    """
+    # Set seaborn style
+    sns.set_style("whitegrid")
+    plt.style.use('seaborn-v0_8')
+    
+    # Get metrics from history
+    metrics = history.history
+    epochs = range(1, len(metrics['loss']) + 1)
+    
+    # Create plots directory
+    plots_dir = os.path.join(experiment_dir, 'plots')
+    os.makedirs(plots_dir, exist_ok=True)
+    
+    # Define metrics to plot
+    metric_pairs = [
+        ('loss', 'val_loss', 'Loss'),
+        ('accuracy', 'val_accuracy', 'Accuracy'),
+        ('precision', 'val_precision', 'Precision'),
+        ('recall', 'val_recall', 'Recall'),
+        ('f1_score', 'val_f1_score', 'F1 Score')
+    ]
+    
+    # Create subplots
+    fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+    fig.suptitle('Training Metrics Over Time', fontsize=16, fontweight='bold')
+    
+    # Flatten axes for easier iteration
+    axes = axes.flatten()
+    
+    for idx, (train_metric, val_metric, title) in enumerate(metric_pairs):
+        if train_metric in metrics and val_metric in metrics:
+            ax = axes[idx]
+            
+            # Plot training and validation metrics
+            ax.plot(epochs, metrics[train_metric], 'o-', label=f'Training {title}', 
+                   linewidth=2, markersize=4)
+            ax.plot(epochs, metrics[val_metric], 's-', label=f'Validation {title}', 
+                   linewidth=2, markersize=4)
+            
+            ax.set_title(f'{title} Over Epochs', fontsize=12, fontweight='bold')
+            ax.set_xlabel('Epoch')
+            ax.set_ylabel(title)
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+            
+            # Add best value annotation
+            best_val = max(metrics[val_metric]) if 'loss' not in val_metric else min(metrics[val_metric])
+            best_epoch = (np.argmax(metrics[val_metric]) if 'loss' not in val_metric 
+                         else np.argmin(metrics[val_metric])) + 1
+            
+            ax.annotate(f'Best: {best_val:.4f}\n(Epoch {best_epoch})',
+                       xy=(best_epoch, best_val),
+                       xytext=(0.7, 0.95), textcoords='axes fraction',
+                       bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.7),
+                       fontsize=9)
+    
+    # Remove empty subplot
+    if len(metric_pairs) < len(axes):
+        fig.delaxes(axes[-1])
+    
+    plt.tight_layout()
+    
+    # Save plot
+    plot_path = os.path.join(plots_dir, 'training_metrics.png')
+    plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    logger.info(f"Training metrics plot saved to: {plot_path}")
+
+
+def plot_test_results(metrics: Dict[str, Any], 
+                     experiment_dir: str,
+                     class_names: list,
+                     logger: logging.Logger) -> None:
+    """
+    Create visualizations for test set results.
+    
+    Args:
+        metrics: Dictionary containing test metrics
+        experiment_dir: Directory to save plots
+        class_names: List of class names
+        logger: Logger instance
+    """
+    # Set seaborn style
+    sns.set_style("whitegrid")
+    plt.style.use('seaborn-v0_8')
+    
+    # Create plots directory
+    plots_dir = os.path.join(experiment_dir, 'plots')
+    os.makedirs(plots_dir, exist_ok=True)
+    
+    # 1. Confusion Matrix Heatmap
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+    fig.suptitle('Test Set Results Visualization', fontsize=16, fontweight='bold')
+    
+    # Confusion Matrix
+    ax1 = axes[0, 0]
+    cm = metrics['confusion_matrix']
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+                xticklabels=class_names, yticklabels=class_names, ax=ax1)
+    ax1.set_title('Confusion Matrix', fontsize=12, fontweight='bold')
+    ax1.set_xlabel('Predicted Label')
+    ax1.set_ylabel('True Label')
+    
+    # Normalized Confusion Matrix
+    ax2 = axes[0, 1]
+    cm_normalized = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+    sns.heatmap(cm_normalized, annot=True, fmt='.2f', cmap='Blues',
+                xticklabels=class_names, yticklabels=class_names, ax=ax2)
+    ax2.set_title('Normalized Confusion Matrix', fontsize=12, fontweight='bold')
+    ax2.set_xlabel('Predicted Label')
+    ax2.set_ylabel('True Label')
+    
+    # Per-class metrics bar plot
+    ax3 = axes[1, 0]
+    if 'classification_report_dict' in metrics:
+        report = metrics['classification_report_dict']
+        classes = [cls for cls in report.keys() if cls not in ['accuracy', 'macro avg', 'weighted avg']]
+        
+        precision_scores = [report[cls]['precision'] for cls in classes]
+        recall_scores = [report[cls]['recall'] for cls in classes]
+        f1_scores = [report[cls]['f1-score'] for cls in classes]
+        
+        x = np.arange(len(classes))
+        width = 0.25
+        
+        ax3.bar(x - width, precision_scores, width, label='Precision', alpha=0.8)
+        ax3.bar(x, recall_scores, width, label='Recall', alpha=0.8)
+        ax3.bar(x + width, f1_scores, width, label='F1-Score', alpha=0.8)
+        
+        ax3.set_xlabel('Classes')
+        ax3.set_ylabel('Score')
+        ax3.set_title('Per-Class Metrics', fontsize=12, fontweight='bold')
+        ax3.set_xticks(x)
+        ax3.set_xticklabels(classes, rotation=45)
+        ax3.legend()
+        ax3.grid(True, alpha=0.3)
+    
+    # Overall metrics summary
+    ax4 = axes[1, 1]
+    overall_metrics = {
+        'Accuracy': metrics.get('accuracy', 0),
+        'Balanced Accuracy': metrics.get('balanced_accuracy', 0),
+        'AUC-ROC': metrics.get('auc_roc', 0),
+        'Avg Specificity': metrics.get('average_specificity', 0)
+    }
+    
+    metric_names = list(overall_metrics.keys())
+    metric_values = list(overall_metrics.values())
+    
+    bars = ax4.bar(metric_names, metric_values, color=['skyblue', 'lightgreen', 'lightcoral', 'gold'])
+    ax4.set_title('Overall Test Metrics', fontsize=12, fontweight='bold')
+    ax4.set_ylabel('Score')
+    ax4.set_ylim(0, 1)
+    
+    # Add value labels on bars
+    for bar, value in zip(bars, metric_values):
+        height = bar.get_height()
+        ax4.text(bar.get_x() + bar.get_width()/2., height + 0.01,
+                f'{value:.3f}', ha='center', va='bottom', fontweight='bold')
+    
+    ax4.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    
+    # Save plot
+    plot_path = os.path.join(plots_dir, 'test_results.png')
+    plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    logger.info(f"Test results visualization saved to: {plot_path}")
+    
+    # Create separate specificity plot if available
+    if 'specificity_per_class' in metrics:
+        plt.figure(figsize=(10, 6))
+        specificity_values = list(metrics['specificity_per_class'].values())
+        
+        bars = plt.bar(class_names, specificity_values, color='lightsteelblue', alpha=0.8)
+        plt.title('Specificity per Class', fontsize=14, fontweight='bold')
+        plt.xlabel('Classes')
+        plt.ylabel('Specificity')
+        plt.xticks(rotation=45)
+        plt.grid(True, alpha=0.3)
+        
+        # Add value labels on bars
+        for bar, value in zip(bars, specificity_values):
+            height = bar.get_height()
+            plt.text(bar.get_x() + bar.get_width()/2., height + 0.01,
+                    f'{value:.3f}', ha='center', va='bottom', fontweight='bold')
+        
+        plt.tight_layout()
+        
+        # Save specificity plot
+        specificity_plot_path = os.path.join(plots_dir, 'specificity_per_class.png')
+        plt.savefig(specificity_plot_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        logger.info(f"Specificity per class plot saved to: {specificity_plot_path}")
 
 
 def evaluate_model(model: tf.keras.Model,
@@ -383,6 +595,10 @@ def main():
         history_dict = {k: [float(x) for x in v] for k, v in history.history.items()}
         json.dump(history_dict, f, indent=2)
     
+    # Plot training metrics
+    logger.info("Creating training metrics visualization...")
+    plot_training_metrics(history, experiment_dir, logger)
+    
     # Load best model for evaluation
     best_model_path = os.path.join(experiment_dir, 'best_model.h5')
     if os.path.exists(best_model_path):
@@ -391,6 +607,10 @@ def main():
     
     # Evaluate on test set
     test_results = evaluate_model(model, test_ds, class_names, experiment_dir, logger)
+    
+    # Plot test results visualization
+    logger.info("Creating test results visualization...")
+    plot_test_results(test_results, experiment_dir, class_names, logger)
     
     logger.info(f"Experiment completed successfully!")
     logger.info(f"Results saved in: {experiment_dir}")
