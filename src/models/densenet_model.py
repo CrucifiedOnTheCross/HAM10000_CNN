@@ -9,6 +9,14 @@ from tensorflow.keras.applications import DenseNet121, DenseNet201
 from typing import Tuple, Optional, Dict, Any
 import logging
 
+# Импорты для дополнительных метрик
+try:
+    import tensorflow_addons as tfa
+    TFA_AVAILABLE = True
+except ImportError:
+    TFA_AVAILABLE = False
+    logging.warning("tensorflow_addons не установлен. F1Score метрика будет недоступна.")
+
 
 class DenseNetTransferModel:
     """
@@ -220,17 +228,27 @@ class DenseNetTransferModel:
         # Create optimizer
         optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
         
+        # Создаем список базовых метрик
+        metrics_list = [
+            'accuracy',
+            tf.keras.metrics.CategoricalAccuracy(name='categorical_accuracy'),
+            tf.keras.metrics.Precision(name='precision'),
+            tf.keras.metrics.Recall(name='recall'),
+            tf.keras.metrics.AUC(name='auc'),
+            tf.keras.metrics.TopKCategoricalAccuracy(k=3, name='top_3_accuracy')
+        ]
+        
+        # Добавляем F1Score если tensorflow_addons доступен
+        if TFA_AVAILABLE:
+            metrics_list.append(tfa.metrics.F1Score(num_classes=self.num_classes, average='macro', name='f1_score'))
+        else:
+            self.logger.warning("F1Score метрика недоступна. Установите tensorflow_addons: pip install tensorflow-addons")
+        
         # Compile model
         self.model.compile(
             optimizer=optimizer,
             loss='categorical_crossentropy',
-            metrics=[
-                'accuracy',
-                tf.keras.metrics.CategoricalAccuracy(name='categorical_accuracy'),
-                tf.keras.metrics.Precision(name='precision'),
-                tf.keras.metrics.Recall(name='recall'),
-                tf.keras.metrics.TopKCategoricalAccuracy(k=3, name='top_3_accuracy')
-            ]
+            metrics=metrics_list
         )
         
         self.logger.info(f"Compiled model for {scenario} with learning rate {learning_rate}")
