@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score
+from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, roc_curve
 from sklearn.preprocessing import label_binarize
 
 # Add src to path for imports
@@ -176,6 +176,24 @@ def calculate_additional_metrics(y_true: np.ndarray,
     else:
         auc_roc = roc_auc_score(y_true_bin, y_pred_proba, multi_class='ovr', average='macro')
     
+    # Calculate ROC curves for each class
+    roc_data = {}
+    auc_per_class = {}
+    
+    if len(class_names) == 2:
+        # Binary classification
+        fpr, tpr, _ = roc_curve(y_true, y_pred_proba[:, 1])
+        roc_auc_class = roc_auc_score(y_true, y_pred_proba[:, 1])
+        roc_data[class_names[1]] = {'fpr': fpr.tolist(), 'tpr': tpr.tolist()}
+        auc_per_class[class_names[1]] = float(roc_auc_class)
+    else:
+        # Multiclass classification - one-vs-rest
+        for i, class_name in enumerate(class_names):
+            fpr, tpr, _ = roc_curve(y_true_bin[:, i], y_pred_proba[:, i])
+            roc_auc_class = roc_auc_score(y_true_bin[:, i], y_pred_proba[:, i])
+            roc_data[class_name] = {'fpr': fpr.tolist(), 'tpr': tpr.tolist()}
+            auc_per_class[class_name] = float(roc_auc_class)
+    
     # Balanced accuracy
     balanced_acc = report['macro avg']['recall']
     
@@ -193,6 +211,8 @@ def calculate_additional_metrics(y_true: np.ndarray,
         'classification_report': report,
         'confusion_matrix': cm.tolist(),
         'auc_roc': float(auc_roc),
+        'auc_per_class': auc_per_class,
+        'roc_curves': roc_data,
         'balanced_accuracy': float(balanced_acc),
         'specificity_per_class': specificity_per_class,
         'average_specificity': float(avg_specificity)
@@ -295,6 +315,66 @@ def plot_training_metrics(history: tf.keras.callbacks.History,
             plt.close()
             
             logger.info(f"Training {title} plot saved to: {plot_path}")
+
+
+def plot_roc_curves(roc_data: Dict[str, Dict[str, list]], 
+                   auc_per_class: Dict[str, float],
+                   experiment_dir: str,
+                   logger: logging.Logger) -> None:
+    """Plot ROC curves for each class."""
+    plots_dir = os.path.join(experiment_dir, 'plots')
+    os.makedirs(plots_dir, exist_ok=True)
+    
+    # Set style
+    plt.style.use('seaborn-v0_8-whitegrid')
+    sns.set_palette("husl")
+    
+    fig, ax = plt.subplots(figsize=(12, 10))
+    
+    # Plot diagonal line (random classifier)
+    ax.plot([0, 1], [0, 1], 'k--', lw=2, alpha=0.8, label='Random Classifier (AUC = 0.50)')
+    
+    # Plot ROC curve for each class
+    colors = plt.cm.Set1(np.linspace(0, 1, len(roc_data)))
+    
+    for i, (class_name, roc_info) in enumerate(roc_data.items()):
+        fpr = np.array(roc_info['fpr'])
+        tpr = np.array(roc_info['tpr'])
+        auc_score = auc_per_class[class_name]
+        
+        ax.plot(fpr, tpr, color=colors[i], lw=3, alpha=0.8,
+                label=f'{class_name} (AUC = {auc_score:.3f})')
+    
+    # Customize plot
+    ax.set_xlim([0.0, 1.0])
+    ax.set_ylim([0.0, 1.05])
+    ax.set_xlabel('False Positive Rate', fontsize=14, fontweight='bold')
+    ax.set_ylabel('True Positive Rate', fontsize=14, fontweight='bold')
+    ax.set_title('ROC Curves - Receiver Operating Characteristic', 
+                fontsize=16, fontweight='bold', pad=20)
+    
+    # Add legend
+    ax.legend(loc="lower right", fontsize=12, frameon=True, 
+             fancybox=True, shadow=True, framealpha=0.9)
+    
+    # Add grid
+    ax.grid(True, alpha=0.3)
+    ax.set_facecolor('#fafafa')
+    
+    # Add average AUC text box
+    avg_auc = np.mean(list(auc_per_class.values()))
+    textstr = f'Average AUC: {avg_auc:.3f}'
+    props = dict(boxstyle='round', facecolor='lightblue', alpha=0.8)
+    ax.text(0.02, 0.98, textstr, transform=ax.transAxes, fontsize=12,
+            verticalalignment='top', bbox=props, fontweight='bold')
+    
+    plt.tight_layout()
+    
+    # Save plot
+    plot_path = os.path.join(plots_dir, 'roc_curves.png')
+    plt.savefig(plot_path, dpi=300, bbox_inches='tight', facecolor='white')
+    plt.close()
+    logger.info(f"ROC curves plot saved to: {plot_path}")
 
 
 def plot_test_results(metrics: Dict[str, Any], 
@@ -469,6 +549,11 @@ def plot_test_results(metrics: Dict[str, Any],
         plt.close()
         
         logger.info(f"Specificity per class plot saved to: {specificity_plot_path}")
+    
+    # 5. ROC Curves plot
+    if 'roc_curves' in metrics and 'auc_per_class' in metrics:
+        plot_roc_curves(metrics['roc_curves'], metrics['auc_per_class'], 
+                       experiment_dir, logger)
 
 
 def evaluate_model(model: tf.keras.Model,
