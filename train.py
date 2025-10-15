@@ -150,10 +150,12 @@ def create_callbacks(experiment_dir: str,
 
 
 def calculate_additional_metrics(y_true: np.ndarray, 
-                               y_pred: np.ndarray, 
                                y_pred_proba: np.ndarray,
                                class_names: list) -> Dict[str, Any]:
     """Calculate additional metrics beyond what Keras provides."""
+    
+    # Convert probabilities to class predictions
+    y_pred = np.argmax(y_pred_proba, axis=1)
     
     # Classification report
     report = classification_report(
@@ -220,7 +222,7 @@ def evaluate_model(model: tf.keras.Model,
     y_pred = np.argmax(y_pred_proba, axis=1)
     
     # Calculate metrics
-    test_metrics = calculate_additional_metrics(y_true, y_pred, y_pred_proba, class_names)
+    test_metrics = calculate_additional_metrics(y_true, y_pred_proba, class_names)
     
     # Save results
     results_file = os.path.join(experiment_dir, 'test_results.json')
