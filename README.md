@@ -56,6 +56,7 @@ pip install tensorflow>=2.8.0
 pip install numpy pandas scikit-learn
 pip install matplotlib seaborn
 pip install Pillow tqdm requests
+pip install kagglehub
 ```
 
 ## Установка и настройка
@@ -68,13 +69,17 @@ cd TransferLearning
 
 2. **Установка зависимостей:**
 ```bash
-pip install tensorflow numpy pandas scikit-learn matplotlib seaborn Pillow tqdm requests
+pip install tensorflow numpy pandas scikit-learn matplotlib seaborn Pillow tqdm requests kagglehub
 ```
 
 3. **Скачивание датасета:**
 ```bash
 python src/utils/download_ham10000.py --dataset_path ./dataset
 ```
+
+Скрипт автоматически загрузит датасет HAM10000 с Kaggle через `kagglehub` и организует файлы в правильную структуру директорий. Поддерживаются следующие опции:
+- `--dataset_path` - путь для сохранения датасета (по умолчанию: ./dataset)
+- `--check-only` - только проверить существующий датасет без загрузки
 
 ## Использование
 
