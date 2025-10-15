@@ -8,7 +8,8 @@ import sys
 import argparse
 import json
 import logging
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
 
@@ -73,10 +74,14 @@ def create_experiment_dir(base_dir: str, scenario: str, architecture: str) -> st
     return experiment_dir
 
 
-def save_experiment_config(experiment_dir: str, args: argparse.Namespace):
+def save_experiment_config(experiment_dir: str, args: argparse.Namespace, training_time: Optional[Dict[str, Any]] = None):
     """Save experiment configuration to JSON file."""
     config = vars(args).copy()
     config['timestamp'] = datetime.now().isoformat()
+    
+    # Add training time if provided
+    if training_time:
+        config.update(training_time)
     
     config_file = os.path.join(experiment_dir, 'config.json')
     with open(config_file, 'w') as f:
@@ -560,7 +565,8 @@ def evaluate_model(model: tf.keras.Model,
                   test_dataset: tf.data.Dataset,
                   class_names: list,
                   experiment_dir: str,
-                  logger: logging.Logger) -> Dict[str, Any]:
+                  logger: logging.Logger,
+                  training_time: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Evaluate model on test set and save results."""
     
     logger.info("Evaluating model on test set...")
@@ -585,6 +591,10 @@ def evaluate_model(model: tf.keras.Model,
     
     # Calculate metrics
     test_metrics = calculate_additional_metrics(y_true, y_pred_proba, class_names)
+    
+    # Add training time if provided
+    if training_time:
+        test_metrics.update(training_time)
     
     # Save results
     results_file = os.path.join(experiment_dir, 'test_results.json')
@@ -722,6 +732,9 @@ def main():
     # Create callbacks
     callbacks = create_callbacks(experiment_dir, monitor_metric='val_f1_score', patience=args.early_stopping_patience)
     
+    # Start training timer
+    training_start_time = time.time()
+    
     # Train model
     logger.info("Starting training...")
     history = model.fit(
@@ -733,11 +746,20 @@ def main():
         verbose=1
     )
     
-    # Save training history
+    # Calculate training time
+    training_end_time = time.time()
+    training_duration = training_end_time - training_start_time
+    training_time_str = str(timedelta(seconds=int(training_duration)))
+    
+    logger.info(f"Training completed in: {training_time_str} ({training_duration:.2f} seconds)")
+    
+    # Save training history with training time
     history_file = os.path.join(experiment_dir, 'training_history.json')
     with open(history_file, 'w') as f:
         # Convert numpy arrays to lists for JSON serialization
         history_dict = {k: [float(x) for x in v] for k, v in history.history.items()}
+        history_dict['training_time_seconds'] = training_duration
+        history_dict['training_time_formatted'] = training_time_str
         json.dump(history_dict, f, indent=2)
     
     # Plot training metrics
@@ -763,13 +785,21 @@ def main():
         # Use the current model if best model doesn't exist
     
     # Evaluate on test set
-    test_results = evaluate_model(model, test_ds, class_names, experiment_dir, logger)
+    training_time_dict = {
+        'training_time_seconds': training_duration,
+        'training_time_formatted': training_time_str
+    }
+    test_results = evaluate_model(model, test_ds, class_names, experiment_dir, logger, training_time_dict)
+    
+    # Update config with training time
+    save_experiment_config(experiment_dir, args, training_time_dict)
     
     # Plot test results visualization
     logger.info("Creating test results visualization...")
     plot_test_results(test_results, experiment_dir, class_names, logger)
     
     logger.info(f"Experiment completed successfully!")
+    logger.info(f"Total training time: {training_time_str}")
     logger.info(f"Results saved in: {experiment_dir}")
 
 
