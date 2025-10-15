@@ -205,7 +205,7 @@ def plot_training_metrics(history: tf.keras.callbacks.History,
                          experiment_dir: str,
                          logger: logging.Logger) -> None:
     """
-    Plot training metrics over epochs using seaborn.
+    Plot training metrics over epochs as separate images.
     
     Args:
         history: Training history from model.fit()
@@ -233,52 +233,68 @@ def plot_training_metrics(history: tf.keras.callbacks.History,
         ('f1_score', 'val_f1_score', 'F1 Score')
     ]
     
-    # Create subplots
-    fig, axes = plt.subplots(2, 3, figsize=(18, 12))
-    fig.suptitle('Training Metrics Over Time', fontsize=16, fontweight='bold')
-    
-    # Flatten axes for easier iteration
-    axes = axes.flatten()
-    
-    for idx, (train_metric, val_metric, title) in enumerate(metric_pairs):
+    # Create separate plots for each metric
+    for train_metric, val_metric, title in metric_pairs:
         if train_metric in metrics and val_metric in metrics:
-            ax = axes[idx]
+            # Create figure with specified size
+            fig, ax = plt.subplots(figsize=(16, 8))
             
-            # Plot training and validation metrics
-            ax.plot(epochs, metrics[train_metric], 'o-', label=f'Training {title}', 
-                   linewidth=2, markersize=4)
-            ax.plot(epochs, metrics[val_metric], 's-', label=f'Validation {title}', 
-                   linewidth=2, markersize=4)
+            # Plot training and validation metrics with better styling
+            train_line = ax.plot(epochs, metrics[train_metric], 'o-', 
+                               label=f'Training {title}', 
+                               linewidth=3, markersize=6, 
+                               color='#2E86AB', alpha=0.8)
+            val_line = ax.plot(epochs, metrics[val_metric], 's-', 
+                             label=f'Validation {title}', 
+                             linewidth=3, markersize=6, 
+                             color='#A23B72', alpha=0.8)
             
-            ax.set_title(f'{title} Over Epochs', fontsize=12, fontweight='bold')
-            ax.set_xlabel('Epoch')
-            ax.set_ylabel(title)
-            ax.legend()
-            ax.grid(True, alpha=0.3)
+            # Set title and labels with better formatting
+            ax.set_title(f'{title} Over Epochs', fontsize=18, fontweight='bold', pad=20)
+            ax.set_xlabel('Epoch', fontsize=14, fontweight='bold')
+            ax.set_ylabel(title, fontsize=14, fontweight='bold')
             
-            # Add best value annotation
-            best_val = max(metrics[val_metric]) if 'loss' not in val_metric else min(metrics[val_metric])
-            best_epoch = (np.argmax(metrics[val_metric]) if 'loss' not in val_metric 
-                         else np.argmin(metrics[val_metric])) + 1
+            # Improve legend
+            ax.legend(fontsize=12, loc='best', frameon=True, fancybox=True, shadow=True)
+            ax.grid(True, alpha=0.3, linestyle='--')
             
-            ax.annotate(f'Best: {best_val:.4f}\n(Epoch {best_epoch})',
+            # Find best value and epoch
+            if 'loss' not in val_metric:
+                best_val = max(metrics[val_metric])
+                best_epoch = np.argmax(metrics[val_metric]) + 1
+                mode = 'max'
+            else:
+                best_val = min(metrics[val_metric])
+                best_epoch = np.argmin(metrics[val_metric]) + 1
+                mode = 'min'
+            
+            # Add vertical line at best epoch
+            ax.axvline(x=best_epoch, color='red', linestyle='--', alpha=0.7, linewidth=2)
+            
+            # Add beautiful annotation with arrow pointing to best value
+            ax.annotate(f'Best {title}: {best_val:.4f}\nEpoch: {best_epoch}',
                        xy=(best_epoch, best_val),
-                       xytext=(0.7, 0.95), textcoords='axes fraction',
-                       bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.7),
-                       fontsize=9)
-    
-    # Remove empty subplot
-    if len(metric_pairs) < len(axes):
-        fig.delaxes(axes[-1])
-    
-    plt.tight_layout()
-    
-    # Save plot
-    plot_path = os.path.join(plots_dir, 'training_metrics.png')
-    plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-    plt.close()
-    
-    logger.info(f"Training metrics plot saved to: {plot_path}")
+                       xytext=(best_epoch + len(epochs)*0.15, best_val + (max(metrics[val_metric]) - min(metrics[val_metric]))*0.1),
+                       bbox=dict(boxstyle='round,pad=0.5', facecolor='lightblue', alpha=0.8, edgecolor='navy'),
+                       fontsize=12, fontweight='bold',
+                       arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0.1', 
+                                     color='red', lw=2))
+            
+            # Improve tick labels
+            ax.tick_params(axis='both', which='major', labelsize=12)
+            
+            # Set margins
+            ax.margins(x=0.02, y=0.05)
+            
+            plt.tight_layout()
+            
+            # Save individual plot
+            plot_filename = f'training_{train_metric.replace("_", "")}.png'
+            plot_path = os.path.join(plots_dir, plot_filename)
+            plt.savefig(plot_path, dpi=300, bbox_inches='tight', facecolor='white')
+            plt.close()
+            
+            logger.info(f"Training {title} plot saved to: {plot_path}")
 
 
 def plot_test_results(metrics: Dict[str, Any], 
@@ -286,7 +302,7 @@ def plot_test_results(metrics: Dict[str, Any],
                      class_names: list,
                      logger: logging.Logger) -> None:
     """
-    Create visualizations for test set results.
+    Create visualizations for test set results as separate images.
     
     Args:
         metrics: Dictionary containing test metrics
@@ -302,94 +318,135 @@ def plot_test_results(metrics: Dict[str, Any],
     plots_dir = os.path.join(experiment_dir, 'plots')
     os.makedirs(plots_dir, exist_ok=True)
     
-    # 1. Confusion Matrix Heatmap
-    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
-    fig.suptitle('Test Set Results Visualization', fontsize=16, fontweight='bold')
-    
-    # Confusion Matrix
-    ax1 = axes[0, 0]
+    # 1. Confusion Matrix (Raw)
     cm = metrics['confusion_matrix']
     # Convert to numpy array if it's a list
     if isinstance(cm, list):
         cm = np.array(cm)
+    
+    fig, ax = plt.subplots(figsize=(12, 10))
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
-                xticklabels=class_names, yticklabels=class_names, ax=ax1)
-    ax1.set_title('Confusion Matrix', fontsize=12, fontweight='bold')
-    ax1.set_xlabel('Predicted Label')
-    ax1.set_ylabel('True Label')
+                xticklabels=class_names, yticklabels=class_names,
+                cbar_kws={'label': 'Count'}, ax=ax)
+    ax.set_title('Confusion Matrix', fontsize=16, fontweight='bold', pad=20)
+    ax.set_xlabel('Predicted Label', fontsize=14, fontweight='bold')
+    ax.set_ylabel('True Label', fontsize=14, fontweight='bold')
+    plt.xticks(rotation=45, ha='right')
+    plt.yticks(rotation=0)
+    plt.tight_layout()
     
-    # Normalized Confusion Matrix
-    ax2 = axes[0, 1]
+    plot_path = os.path.join(plots_dir, 'confusion_matrix.png')
+    plt.savefig(plot_path, dpi=300, bbox_inches='tight', facecolor='white')
+    plt.close()
+    logger.info(f"Confusion matrix saved to: {plot_path}")
+    
+    # 2. Normalized Confusion Matrix
     cm_normalized = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-    sns.heatmap(cm_normalized, annot=True, fmt='.2f', cmap='Blues',
-                xticklabels=class_names, yticklabels=class_names, ax=ax2)
-    ax2.set_title('Normalized Confusion Matrix', fontsize=12, fontweight='bold')
-    ax2.set_xlabel('Predicted Label')
-    ax2.set_ylabel('True Label')
+    fig, ax = plt.subplots(figsize=(12, 10))
+    sns.heatmap(cm_normalized, annot=True, fmt='.3f', cmap='Blues',
+                xticklabels=class_names, yticklabels=class_names,
+                cbar_kws={'label': 'Proportion'}, ax=ax)
+    ax.set_title('Normalized Confusion Matrix', fontsize=16, fontweight='bold', pad=20)
+    ax.set_xlabel('Predicted Label', fontsize=14, fontweight='bold')
+    ax.set_ylabel('True Label', fontsize=14, fontweight='bold')
+    plt.xticks(rotation=45, ha='right')
+    plt.yticks(rotation=0)
+    plt.tight_layout()
     
-    # Per-class metrics bar plot
-    ax3 = axes[1, 0]
-    if 'classification_report_dict' in metrics:
-        report = metrics['classification_report_dict']
+    plot_path = os.path.join(plots_dir, 'confusion_matrix_normalized.png')
+    plt.savefig(plot_path, dpi=300, bbox_inches='tight', facecolor='white')
+    plt.close()
+    logger.info(f"Normalized confusion matrix saved to: {plot_path}")
+    
+    # 3. Per-class metrics bar plot
+    if 'classification_report' in metrics:
+        report = metrics['classification_report']
         classes = [cls for cls in report.keys() if cls not in ['accuracy', 'macro avg', 'weighted avg']]
         
         precision_scores = [report[cls]['precision'] for cls in classes]
         recall_scores = [report[cls]['recall'] for cls in classes]
         f1_scores = [report[cls]['f1-score'] for cls in classes]
         
+        fig, ax = plt.subplots(figsize=(14, 8))
         x = np.arange(len(classes))
         width = 0.25
         
-        ax3.bar(x - width, precision_scores, width, label='Precision', alpha=0.8)
-        ax3.bar(x, recall_scores, width, label='Recall', alpha=0.8)
-        ax3.bar(x + width, f1_scores, width, label='F1-Score', alpha=0.8)
+        bars1 = ax.bar(x - width, precision_scores, width, label='Precision', 
+                       color='#2E86AB', alpha=0.8)
+        bars2 = ax.bar(x, recall_scores, width, label='Recall', 
+                       color='#A23B72', alpha=0.8)
+        bars3 = ax.bar(x + width, f1_scores, width, label='F1-Score', 
+                       color='#F18F01', alpha=0.8)
         
-        ax3.set_xlabel('Classes')
-        ax3.set_ylabel('Score')
-        ax3.set_title('Per-Class Metrics', fontsize=12, fontweight='bold')
-        ax3.set_xticks(x)
-        ax3.set_xticklabels(classes, rotation=45)
-        ax3.legend()
-        ax3.grid(True, alpha=0.3)
+        ax.set_title('Per-Class Performance Metrics', fontsize=16, fontweight='bold', pad=20)
+        ax.set_xlabel('Classes', fontsize=14, fontweight='bold')
+        ax.set_ylabel('Score', fontsize=14, fontweight='bold')
+        ax.set_xticks(x)
+        ax.set_xticklabels(classes, rotation=45, ha='right')
+        ax.legend(fontsize=12, loc='best', frameon=True, fancybox=True, shadow=True)
+        ax.grid(True, alpha=0.3, linestyle='--')
+        ax.set_ylim(0, 1.1)
+        
+        # Add value labels on bars
+        def add_value_labels(bars):
+            for bar in bars:
+                height = bar.get_height()
+                ax.annotate(f'{height:.3f}',
+                           xy=(bar.get_x() + bar.get_width() / 2, height),
+                           xytext=(0, 3),  # 3 points vertical offset
+                           textcoords="offset points",
+                           ha='center', va='bottom', fontsize=9)
+        
+        add_value_labels(bars1)
+        add_value_labels(bars2)
+        add_value_labels(bars3)
+        
+        plt.tight_layout()
+        
+        plot_path = os.path.join(plots_dir, 'per_class_metrics.png')
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight', facecolor='white')
+        plt.close()
+        logger.info(f"Per-class metrics plot saved to: {plot_path}")
     
-    # Overall metrics summary
-    ax4 = axes[1, 1]
+    # 4. Overall metrics summary
     overall_metrics = {
-        'Accuracy': metrics.get('accuracy', 0),
+        'Accuracy': metrics.get('accuracy', metrics.get('classification_report', {}).get('accuracy', 0)),
         'Balanced Accuracy': metrics.get('balanced_accuracy', 0),
         'AUC-ROC': metrics.get('auc_roc', 0),
         'Avg Specificity': metrics.get('average_specificity', 0)
     }
     
+    fig, ax = plt.subplots(figsize=(10, 6))
     metric_names = list(overall_metrics.keys())
     metric_values = list(overall_metrics.values())
+    colors = ['#2E86AB', '#A23B72', '#F18F01', '#C73E1D']
     
-    bars = ax4.bar(metric_names, metric_values, color=['skyblue', 'lightgreen', 'lightcoral', 'gold'])
-    ax4.set_title('Overall Test Metrics', fontsize=12, fontweight='bold')
-    ax4.set_ylabel('Score')
-    ax4.set_ylim(0, 1)
+    bars = ax.bar(metric_names, metric_values, color=colors, alpha=0.8, edgecolor='black', linewidth=1)
+    
+    ax.set_title('Overall Test Performance', fontsize=16, fontweight='bold', pad=20)
+    ax.set_ylabel('Score', fontsize=14, fontweight='bold')
+    ax.set_ylim(0, 1.1)
+    ax.grid(True, alpha=0.3, linestyle='--', axis='y')
     
     # Add value labels on bars
     for bar, value in zip(bars, metric_values):
-        height = bar.get_height()
-        ax4.text(bar.get_x() + bar.get_width()/2., height + 0.01,
-                f'{value:.3f}', ha='center', va='bottom', fontweight='bold')
-    
-    ax4.grid(True, alpha=0.3)
+        ax.annotate(f'{value:.4f}',
+                   xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
+                   xytext=(0, 5),
+                   textcoords="offset points",
+                   ha='center', va='bottom', fontsize=12, fontweight='bold')
     
     plt.tight_layout()
     
-    # Save plot
-    plot_path = os.path.join(plots_dir, 'test_results.png')
-    plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+    plot_path = os.path.join(plots_dir, 'overall_test_metrics.png')
+    plt.savefig(plot_path, dpi=300, bbox_inches='tight', facecolor='white')
     plt.close()
-    
-    logger.info(f"Test results visualization saved to: {plot_path}")
+    logger.info(f"Overall test metrics plot saved to: {plot_path}")
     
     # Create separate specificity plot if available
     if 'specificity_per_class' in metrics:
         plt.figure(figsize=(10, 6))
-        specificity_values = list(metrics['specificity_per_class'].values())
+        specificity_values = list(metrics['specificity_per_class'])
         
         bars = plt.bar(class_names, specificity_values, color='lightsteelblue', alpha=0.8)
         plt.title('Specificity per Class', fontsize=14, fontweight='bold')
@@ -609,9 +666,16 @@ def main():
         # Import custom F1Score metric for loading
         from src.models.densenet_model import F1Score
         
+        # Create a custom F1Score instance with the correct num_classes
+        f1_score_instance = F1Score(num_classes=len(class_names))
+        
         # Load model with custom objects
         with tf.keras.utils.custom_object_scope({'F1Score': F1Score}):
-            model = tf.keras.models.load_model(best_model_path)
+            model = tf.keras.models.load_model(best_model_path, 
+                                             custom_objects={'F1Score': F1Score})
+    else:
+        logger.warning(f"Best model not found at {best_model_path}. Using current model.")
+        # Use the current model if best model doesn't exist
     
     # Evaluate on test set
     test_results = evaluate_model(model, test_ds, class_names, experiment_dir, logger)
