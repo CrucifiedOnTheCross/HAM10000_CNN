@@ -228,8 +228,8 @@ class DenseNetTransferModel:
                 'accuracy',
                 tf.keras.metrics.Precision(name='precision'),
                 tf.keras.metrics.Recall(name='recall'),
-                tf.keras.metrics.Precision(name='precision_macro', average='macro'),
-                tf.keras.metrics.Recall(name='recall_macro', average='macro')
+                tf.keras.metrics.Precision(name='precision_macro'),
+                tf.keras.metrics.Recall(name='recall_macro')
             ]
         )
         
