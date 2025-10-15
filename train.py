@@ -219,6 +219,11 @@ def evaluate_model(model: tf.keras.Model,
     
     y_true = np.array(y_true)
     y_pred_proba = np.array(y_pred_proba)
+    
+    # Convert one-hot encoded y_true to integer labels for sklearn metrics
+    if y_true.ndim > 1 and y_true.shape[1] > 1:
+        y_true = np.argmax(y_true, axis=1)
+    
     y_pred = np.argmax(y_pred_proba, axis=1)
     
     # Calculate metrics
