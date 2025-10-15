@@ -215,8 +215,12 @@ class DatasetLoader:
                       for img_id in df['image_id']]
         labels = df['label_encoded'].values
         
+        # Convert labels to one-hot encoding
+        num_classes = len(self.class_names)
+        labels_one_hot = tf.keras.utils.to_categorical(labels, num_classes=num_classes)
+        
         # Create dataset from paths and labels
-        dataset = tf.data.Dataset.from_tensor_slices((image_paths, labels))
+        dataset = tf.data.Dataset.from_tensor_slices((image_paths, labels_one_hot))
         
         # Map preprocessing function
         dataset = dataset.map(
