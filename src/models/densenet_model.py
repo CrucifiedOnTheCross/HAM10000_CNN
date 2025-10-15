@@ -18,6 +18,65 @@ except ImportError:
     logging.warning("tensorflow_addons не установлен. F1Score метрика будет недоступна.")
 
 
+class F1Score(tf.keras.metrics.Metric):
+    """Custom F1 Score metric for multiclass classification."""
+    
+    def __init__(self, num_classes, average='macro', name='f1_score', **kwargs):
+        super().__init__(name=name, **kwargs)
+        self.num_classes = num_classes
+        self.average = average
+        
+        # Initialize true positives, false positives, false negatives
+        self.true_positives = self.add_weight(
+            name='tp', shape=(num_classes,), initializer='zeros'
+        )
+        self.false_positives = self.add_weight(
+            name='fp', shape=(num_classes,), initializer='zeros'
+        )
+        self.false_negatives = self.add_weight(
+            name='fn', shape=(num_classes,), initializer='zeros'
+        )
+    
+    def update_state(self, y_true, y_pred, sample_weight=None):
+        # Convert predictions to class indices
+        y_pred = tf.argmax(y_pred, axis=1)
+        y_true = tf.argmax(y_true, axis=1)
+        
+        # Convert to one-hot for per-class calculations
+        y_true_onehot = tf.one_hot(y_true, self.num_classes)
+        y_pred_onehot = tf.one_hot(y_pred, self.num_classes)
+        
+        # Calculate true positives, false positives, false negatives
+        tp = tf.reduce_sum(y_true_onehot * y_pred_onehot, axis=0)
+        fp = tf.reduce_sum((1 - y_true_onehot) * y_pred_onehot, axis=0)
+        fn = tf.reduce_sum(y_true_onehot * (1 - y_pred_onehot), axis=0)
+        
+        self.true_positives.assign_add(tp)
+        self.false_positives.assign_add(fp)
+        self.false_negatives.assign_add(fn)
+    
+    def result(self):
+        # Calculate precision and recall for each class
+        precision = self.true_positives / (self.true_positives + self.false_positives + tf.keras.backend.epsilon())
+        recall = self.true_positives / (self.true_positives + self.false_negatives + tf.keras.backend.epsilon())
+        
+        # Calculate F1 score for each class
+        f1 = 2 * (precision * recall) / (precision + recall + tf.keras.backend.epsilon())
+        
+        if self.average == 'macro':
+            return tf.reduce_mean(f1)
+        elif self.average == 'weighted':
+            # For weighted average, we'd need class weights
+            return tf.reduce_mean(f1)
+        else:
+            return f1
+    
+    def reset_state(self):
+        self.true_positives.assign(tf.zeros_like(self.true_positives))
+        self.false_positives.assign(tf.zeros_like(self.false_positives))
+        self.false_negatives.assign(tf.zeros_like(self.false_negatives))
+
+
 class DenseNetTransferModel:
     """
     DenseNet-based transfer learning model for dermatoscopic image classification.
@@ -238,11 +297,12 @@ class DenseNetTransferModel:
             tf.keras.metrics.TopKCategoricalAccuracy(k=3, name='top_3_accuracy')
         ]
         
-        # Добавляем F1Score если tensorflow_addons доступен
+        # Добавляем F1Score метрику (используем tensorflow_addons если доступен, иначе кастомную)
         if TFA_AVAILABLE:
             metrics_list.append(tfa.metrics.F1Score(num_classes=self.num_classes, average='macro', name='f1_score'))
         else:
-            self.logger.warning("F1Score метрика недоступна. Установите tensorflow_addons: pip install tensorflow-addons")
+            metrics_list.append(F1Score(num_classes=self.num_classes, average='macro', name='f1_score'))
+            self.logger.info("Используется кастомная F1Score метрика")
         
         # Compile model
         self.model.compile(

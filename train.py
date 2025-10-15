@@ -309,6 +309,9 @@ def plot_test_results(metrics: Dict[str, Any],
     # Confusion Matrix
     ax1 = axes[0, 0]
     cm = metrics['confusion_matrix']
+    # Convert to numpy array if it's a list
+    if isinstance(cm, list):
+        cm = np.array(cm)
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
                 xticklabels=class_names, yticklabels=class_names, ax=ax1)
     ax1.set_title('Confusion Matrix', fontsize=12, fontweight='bold')
@@ -575,7 +578,7 @@ def main():
         f.write(model_builder.get_model_summary())
     
     # Create callbacks
-    callbacks = create_callbacks(experiment_dir, patience=args.early_stopping_patience)
+    callbacks = create_callbacks(experiment_dir, monitor_metric='val_f1_score', patience=args.early_stopping_patience)
     
     # Train model
     logger.info("Starting training...")
