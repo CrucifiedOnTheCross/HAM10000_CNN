@@ -273,6 +273,33 @@ class DatasetLoader:
         
         return train_dataset, val_dataset, test_dataset
     
+    def create_datasets(self, 
+                       augment_train: bool = True,
+                       test_size: float = 0.15,
+                       val_size: float = 0.15) -> Tuple[tf.data.Dataset, tf.data.Dataset, tf.data.Dataset]:
+        """
+        Create train, validation and test datasets.
+        This is an alias for prepare_datasets method for compatibility.
+        
+        Args:
+            augment_train: Whether to augment training data
+            test_size: Proportion of test set
+            val_size: Proportion of validation set
+            
+        Returns:
+            Tuple of (train_dataset, val_dataset, test_dataset)
+        """
+        return self.prepare_datasets(augment_train, test_size, val_size)
+    
+    def get_class_names(self) -> list:
+        """
+        Get list of class names.
+        
+        Returns:
+            List of class names
+        """
+        return self.class_names
+    
     def get_dataset_info(self) -> Dict:
         """
         Get information about the dataset.
