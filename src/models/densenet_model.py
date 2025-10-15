@@ -359,7 +359,7 @@ class DenseNetTransferModel:
     
     def load_model(self, filepath: str) -> tf.keras.Model:
         """
-        Load model from file.
+        Load model from file with custom objects support.
         
         Args:
             filepath: Path to model file
@@ -367,7 +367,10 @@ class DenseNetTransferModel:
         Returns:
             Loaded model
         """
-        self.model = tf.keras.models.load_model(filepath)
+        # Load model with custom objects
+        with tf.keras.utils.custom_object_scope({'F1Score': F1Score}):
+            self.model = tf.keras.models.load_model(filepath)
+        
         self.logger.info(f"Model loaded from: {filepath}")
         
         return self.model

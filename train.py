@@ -606,7 +606,12 @@ def main():
     best_model_path = os.path.join(experiment_dir, 'best_model.h5')
     if os.path.exists(best_model_path):
         logger.info("Loading best model for evaluation...")
-        model = tf.keras.models.load_model(best_model_path)
+        # Import custom F1Score metric for loading
+        from src.models.densenet_model import F1Score
+        
+        # Load model with custom objects
+        with tf.keras.utils.custom_object_scope({'F1Score': F1Score}):
+            model = tf.keras.models.load_model(best_model_path)
     
     # Evaluate on test set
     test_results = evaluate_model(model, test_ds, class_names, experiment_dir, logger)
