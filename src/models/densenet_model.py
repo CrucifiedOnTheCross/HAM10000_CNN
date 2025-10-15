@@ -226,10 +226,10 @@ class DenseNetTransferModel:
             loss='sparse_categorical_crossentropy',
             metrics=[
                 'accuracy',
-                tf.keras.metrics.Precision(name='precision'),
-                tf.keras.metrics.Recall(name='recall'),
-                tf.keras.metrics.Precision(name='precision_macro'),
-                tf.keras.metrics.Recall(name='recall_macro')
+                tf.keras.metrics.SparseCategoricalAccuracy(name='sparse_accuracy'),
+                tf.keras.metrics.Precision(name='precision', class_id=0),
+                tf.keras.metrics.Recall(name='recall', class_id=0),
+                tf.keras.metrics.TopKCategoricalAccuracy(k=3, name='top_3_accuracy')
             ]
         )
         
