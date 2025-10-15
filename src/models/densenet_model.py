@@ -154,7 +154,7 @@ class DenseNetTransferModel:
         if scenario == 'head_only':
             # Freeze all base model layers
             self.base_model.trainable = False
-            trainable_params = sum([tf.keras.utils.count_params(layer.weights) 
+            trainable_params = sum([layer.count_params() 
                                   for layer in self.model.layers if layer.trainable])
             self.logger.info(f"HEAD_ONLY: Frozen base model, {trainable_params:,} trainable parameters")
             
@@ -175,7 +175,7 @@ class DenseNetTransferModel:
             for layer in self.base_model.layers[freeze_layers:]:
                 layer.trainable = True
             
-            trainable_params = sum([tf.keras.utils.count_params(layer.weights) 
+            trainable_params = sum([layer.count_params() 
                                   for layer in self.model.layers if layer.trainable])
             self.logger.info(f"PARTIAL_UNFREEZE: Unfroze top {unfreeze_percent}% ({unfreeze_layers}) layers, "
                            f"{trainable_params:,} trainable parameters")
@@ -183,7 +183,7 @@ class DenseNetTransferModel:
         elif scenario == 'full_training':
             # Unfreeze all layers
             self.base_model.trainable = True
-            trainable_params = sum([tf.keras.utils.count_params(layer.weights) 
+            trainable_params = sum([layer.count_params() 
                                   for layer in self.model.layers if layer.trainable])
             self.logger.info(f"FULL_TRAINING: All layers trainable, {trainable_params:,} trainable parameters")
             
@@ -307,7 +307,7 @@ class DenseNetTransferModel:
             'total_layers': len(self.model.layers),
             'trainable_layers': sum([1 for layer in self.model.layers if layer.trainable]),
             'total_params': self.model.count_params(),
-            'trainable_params': sum([tf.keras.utils.count_params(layer.weights) 
+            'trainable_params': sum([layer.count_params() 
                                    for layer in self.model.layers if layer.trainable]),
             'base_model_layers': len(self.base_model.layers) if self.base_model else 0
         }
