@@ -295,13 +295,12 @@ def main():
     logger.info("Loading dataset...")
     dataset_loader = DatasetLoader(
         dataset_path=args.dataset_path,
-        metadata_file=args.metadata_file,
         image_size=(args.image_size, args.image_size),
         batch_size=args.batch_size
     )
     
     # Download dataset if needed
-    if not os.path.exists(os.path.join(args.dataset_path, args.metadata_file)):
+    if not os.path.exists(os.path.join(args.dataset_path, 'metadata', args.metadata_file)):
         logger.info("Dataset not found, downloading...")
         dataset_loader.download_dataset()
     
