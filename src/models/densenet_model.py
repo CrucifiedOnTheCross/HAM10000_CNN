@@ -75,6 +75,18 @@ class F1Score(tf.keras.metrics.Metric):
         self.true_positives.assign(tf.zeros_like(self.true_positives))
         self.false_positives.assign(tf.zeros_like(self.false_positives))
         self.false_negatives.assign(tf.zeros_like(self.false_negatives))
+    
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            'num_classes': self.num_classes,
+            'average': self.average
+        })
+        return config
+    
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
 
 class DenseNetTransferModel:
