@@ -89,7 +89,7 @@ def save_experiment_config(experiment_dir: str, args: argparse.Namespace, traini
 
 
 def create_callbacks(experiment_dir: str, 
-                    monitor_metric: str = 'val_f1_score',
+                    monitor_metric: str = 'val_auc',
                     patience: int = 10) -> list:
     """Create training callbacks."""
     callbacks = []
@@ -730,7 +730,7 @@ def main():
         f.write(model_builder.get_model_summary())
     
     # Create callbacks
-    callbacks = create_callbacks(experiment_dir, monitor_metric='val_f1_score', patience=args.early_stopping_patience)
+    callbacks = create_callbacks(experiment_dir, monitor_metric='val_auc', patience=args.early_stopping_patience)
     
     # Start training timer
     training_start_time = time.time()
