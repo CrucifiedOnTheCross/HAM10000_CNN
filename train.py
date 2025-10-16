@@ -154,9 +154,13 @@ def create_callbacks(experiment_dir: str,
     tensorboard_dir = os.path.join(experiment_dir, 'logs')
     tensorboard = tf.keras.callbacks.TensorBoard(
         log_dir=tensorboard_dir,
-        histogram_freq=1,
-        write_graph=True,
-        write_images=True
+        histogram_freq=1,  # Логирование гистограмм весов каждую эпоху
+        write_graph=True,  # Сохранение графа модели
+        write_images=True,  # Сохранение изображений (если есть)
+        update_freq='epoch',  # Обновление метрик каждую эпоху
+        profile_batch=0,  # Отключаем профилирование для экономии места
+        embeddings_freq=1,  # Логирование эмбеддингов каждую эпоху
+        write_steps_per_second=True  # Логирование скорости обучения
     )
     callbacks.append(tensorboard)
     
