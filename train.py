@@ -61,10 +61,23 @@ def setup_gpu_strategy(logger: logging.Logger) -> tf.distribute.Strategy:
     return strategy
 
 
-def create_experiment_dir(base_dir: str, scenario: str, architecture: str) -> str:
-    """Create experiment directory with timestamp."""
+def create_experiment_dir(base_dir: str, scenario: str, architecture: str, 
+                         use_class_weights: bool = False, augmentation: bool = False) -> str:
+    """Create experiment directory with timestamp and configuration flags."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    experiment_name = f"{scenario}_{architecture}_{timestamp}"
+    
+    # Build experiment name with configuration flags
+    name_parts = [scenario, architecture]
+    
+    if use_class_weights:
+        name_parts.append("weights")
+    
+    if augmentation:
+        name_parts.append("aug")
+    
+    name_parts.append(timestamp)
+    experiment_name = "_".join(name_parts)
+    
     experiment_dir = os.path.join(base_dir, experiment_name)
     
     os.makedirs(experiment_dir, exist_ok=True)
@@ -653,7 +666,8 @@ def main():
     args = parser.parse_args()
     
     # Create experiment directory
-    experiment_dir = create_experiment_dir(args.experiment_dir, args.scenario, args.architecture)
+    experiment_dir = create_experiment_dir(args.experiment_dir, args.scenario, args.architecture, 
+                                         args.use_class_weights, args.augmentation)
     
     # Setup logging
     logger = setup_logging(experiment_dir)
