@@ -103,7 +103,8 @@ def save_experiment_config(experiment_dir: str, args: argparse.Namespace, traini
 
 def create_callbacks(experiment_dir: str, 
                     monitor_metric: str = 'val_auc',
-                    patience: int = 10) -> list:
+                    patience: int = 10,
+                    experiment_name: str = None) -> list:
     """Create training callbacks."""
     callbacks = []
     
@@ -150,8 +151,16 @@ def create_callbacks(experiment_dir: str,
     )
     callbacks.append(reduce_lr)
     
-    # TensorBoard logging
-    tensorboard_dir = os.path.join(experiment_dir, 'logs')
+    # TensorBoard logging - use shared logs directory for all experiments
+    if experiment_name:
+        # Create shared logs directory in the parent of experiment_dir
+        base_dir = os.path.dirname(experiment_dir)
+        shared_logs_dir = os.path.join(base_dir, 'tensorboard_logs')
+        tensorboard_dir = os.path.join(shared_logs_dir, experiment_name)
+    else:
+        # Fallback to individual experiment logs
+        tensorboard_dir = os.path.join(experiment_dir, 'logs')
+    
     tensorboard = tf.keras.callbacks.TensorBoard(
         log_dir=tensorboard_dir,
         histogram_freq=1,  # Логирование гистограмм весов каждую эпоху
@@ -241,6 +250,88 @@ def calculate_additional_metrics(y_true: np.ndarray,
     }
     
     return metrics
+
+
+def save_plots_to_tensorboard(history: tf.keras.callbacks.History,
+                             experiment_dir: str,
+                             logger: logging.Logger,
+                             experiment_name: str = None) -> None:
+    """
+    Save training plots to TensorBoard as images.
+    
+    Args:
+        history: Training history from model.fit()
+        experiment_dir: Directory containing TensorBoard logs
+        logger: Logger instance
+        experiment_name: Name of the experiment for TensorBoard logging
+    """
+    import io
+    
+    # Get metrics from history
+    metrics = history.history
+    epochs = range(1, len(metrics['loss']) + 1)
+    
+    # TensorBoard log directory - use shared logs if experiment_name provided
+    if experiment_name:
+        base_dir = os.path.dirname(experiment_dir)
+        shared_logs_dir = os.path.join(base_dir, 'tensorboard_logs')
+        tensorboard_dir = os.path.join(shared_logs_dir, experiment_name)
+    else:
+        tensorboard_dir = os.path.join(experiment_dir, 'logs')
+    
+    # Create a file writer for TensorBoard
+    writer = tf.summary.create_file_writer(tensorboard_dir)
+    
+    # Define metrics to plot
+    metric_pairs = [
+        ('loss', 'val_loss', 'Loss'),
+        ('accuracy', 'val_accuracy', 'Accuracy'),
+        ('precision', 'val_precision', 'Precision'),
+        ('recall', 'val_recall', 'Recall'),
+        ('f1_score', 'val_f1_score', 'F1 Score')
+    ]
+    
+    with writer.as_default():
+        for train_metric, val_metric, title in metric_pairs:
+            if train_metric in metrics and val_metric in metrics:
+                # Create figure
+                fig, ax = plt.subplots(figsize=(12, 8))
+                
+                # Plot training and validation metrics
+                ax.plot(epochs, metrics[train_metric], 'o-', 
+                       label=f'Training {title}', 
+                       linewidth=3, markersize=6, 
+                       color='#2E86AB', alpha=0.8)
+                ax.plot(epochs, metrics[val_metric], 's-', 
+                       label=f'Validation {title}', 
+                       linewidth=3, markersize=6, 
+                       color='#A23B72', alpha=0.8)
+                
+                # Styling
+                ax.set_title(f'{title} Over Epochs', fontsize=16, fontweight='bold')
+                ax.set_xlabel('Epoch', fontsize=12, fontweight='bold')
+                ax.set_ylabel(title, fontsize=12, fontweight='bold')
+                ax.legend(fontsize=10, loc='best')
+                ax.grid(True, alpha=0.3)
+                
+                # Convert plot to image
+                buf = io.BytesIO()
+                plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+                buf.seek(0)
+                
+                # Convert to tensor
+                image = tf.image.decode_png(buf.getvalue(), channels=4)
+                image = tf.expand_dims(image, 0)
+                
+                # Log to TensorBoard
+                tf.summary.image(f'Training_Plots/{title}', image, step=0)
+                
+                plt.close()
+                buf.close()
+        
+        writer.flush()
+    
+    logger.info("Training plots saved to TensorBoard")
 
 
 def plot_training_metrics(history: tf.keras.callbacks.History, 
@@ -747,8 +838,9 @@ def main():
     with open(summary_file, 'w') as f:
         f.write(model_builder.get_model_summary())
     
-    # Create callbacks
-    callbacks = create_callbacks(experiment_dir, monitor_metric='val_auc', patience=args.early_stopping_patience)
+    # Create callbacks with experiment name for shared TensorBoard logging
+    experiment_name = os.path.basename(experiment_dir)
+    callbacks = create_callbacks(experiment_dir, monitor_metric='val_auc', patience=args.early_stopping_patience, experiment_name=experiment_name)
     
     # Start training timer
     training_start_time = time.time()
@@ -783,6 +875,11 @@ def main():
     # Plot training metrics
     logger.info("Creating training metrics visualization...")
     plot_training_metrics(history, experiment_dir, logger)
+    
+    # Save plots to TensorBoard
+    logger.info("Saving training plots to TensorBoard...")
+    experiment_name = os.path.basename(experiment_dir)
+    save_plots_to_tensorboard(history, experiment_dir, logger, experiment_name)
     
     # Load best model for evaluation
     best_model_path = os.path.join(experiment_dir, 'best_model.h5')

@@ -302,7 +302,6 @@ class DenseNetTransferModel:
         # Создаем список базовых метрик
         metrics_list = [
             'accuracy',
-            tf.keras.metrics.CategoricalAccuracy(name='categorical_accuracy'),
             tf.keras.metrics.Precision(name='precision'),
             tf.keras.metrics.Recall(name='recall'),
             tf.keras.metrics.AUC(name='auc'),
