@@ -118,6 +118,12 @@ class DatasetLoader:
             
         return self.class_weights
     
+    def calculate_class_weights(self) -> Dict[int, float]:
+        """
+        Alias for compute_class_weights to match train.py usage.
+        """
+        return self.compute_class_weights()
+    
     def load_and_preprocess_image(self, image_path: str) -> tf.Tensor:
         """
         Load and preprocess a single image.
@@ -324,3 +330,23 @@ class DatasetLoader:
         }
         
         return info
+    
+    def download_dataset(self) -> bool:
+        """
+        Download or verify HAM10000 dataset using HAM10000Downloader.
+        Returns True if dataset is ready.
+        """
+        try:
+            from src.utils.download_ham10000 import HAM10000Downloader
+        except Exception as e:
+            self.logger.error(f"Failed to import downloader: {e}")
+            return False
+        
+        downloader = HAM10000Downloader(self.dataset_path)
+        ready = downloader.download()
+        if ready:
+            self.logger.info("Dataset is ready for use.")
+            return True
+        else:
+            self.logger.error("Failed to download/verify dataset.")
+            return False
