@@ -157,9 +157,13 @@ def create_callbacks(experiment_dir: str,
         base_dir = os.path.dirname(experiment_dir)
         shared_logs_dir = os.path.join(base_dir, 'tensorboard_logs')
         tensorboard_dir = os.path.join(shared_logs_dir, experiment_name)
+        # Ensure the tensorboard_logs directory exists
+        os.makedirs(shared_logs_dir, exist_ok=True)
+        os.makedirs(tensorboard_dir, exist_ok=True)
     else:
         # Fallback to individual experiment logs
         tensorboard_dir = os.path.join(experiment_dir, 'logs')
+        os.makedirs(tensorboard_dir, exist_ok=True)
     
     tensorboard = tf.keras.callbacks.TensorBoard(
         log_dir=tensorboard_dir,
@@ -276,8 +280,12 @@ def save_plots_to_tensorboard(history: tf.keras.callbacks.History,
         base_dir = os.path.dirname(experiment_dir)
         shared_logs_dir = os.path.join(base_dir, 'tensorboard_logs')
         tensorboard_dir = os.path.join(shared_logs_dir, experiment_name)
+        # Ensure the tensorboard_logs directory exists
+        os.makedirs(shared_logs_dir, exist_ok=True)
+        os.makedirs(tensorboard_dir, exist_ok=True)
     else:
         tensorboard_dir = os.path.join(experiment_dir, 'logs')
+        os.makedirs(tensorboard_dir, exist_ok=True)
     
     # Create a file writer for TensorBoard
     writer = tf.summary.create_file_writer(tensorboard_dir)
@@ -731,8 +739,8 @@ def main():
                        help='Metadata CSV filename')
     
     # Model arguments
-    parser.add_argument('--architecture', type=str, choices=['densenet121', 'densenet201'], 
-                       default='densenet121', help='DenseNet architecture')
+    parser.add_argument('--architecture', type=str, choices=['densenet121', 'densenet201', 'simple_cnn'], 
+                       default='densenet121', help='Model architecture')
     parser.add_argument('--scenario', type=str, 
                        choices=['head_only', 'partial_unfreeze', 'full_training'],
                        default='head_only', help='Training scenario')
@@ -808,12 +816,20 @@ def main():
     # Build model within strategy scope
     with strategy.scope():
         # Create model
-        model_builder = DenseNetTransferModel(
-            num_classes=num_classes,
-            input_shape=(args.image_size, args.image_size, 3),
-            architecture=args.architecture,
-            dropout_rate=args.dropout_rate
-        )
+        if args.architecture in ['densenet121', 'densenet201']:
+            model_builder = DenseNetTransferModel(
+                num_classes=num_classes,
+                input_shape=(args.image_size, args.image_size, 3),
+                architecture=args.architecture,
+                dropout_rate=args.dropout_rate
+            )
+        else:
+            from src.models.simple_cnn_model import SimpleCNNModel
+            model_builder = SimpleCNNModel(
+                num_classes=num_classes,
+                input_shape=(args.image_size, args.image_size, 3),
+                dropout_rate=args.dropout_rate
+            )
         
         # Build and configure model
         model = model_builder.build_model(args.scenario)
